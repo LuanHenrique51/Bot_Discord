@@ -3,21 +3,18 @@ import threading
 from flask import Flask
 import discord
 from discord.ext import commands
-import yt_dlp
+import wavelink
 
-# =========================
-# VARIÁVEIS
-# =========================
 TOKEN = os.getenv("TOKEN")
 
 # =========================
-# FLASK (para Render Web Service free)
+# FLASK (para manter ativo no Render)
 # =========================
 app = Flask(__name__)
 
 @app.route("/")
 def home():
-    return "Bot está rodando!"
+    return "Bot rodando!"
 
 def run_web():
     port = int(os.environ.get("PORT", 10000))
@@ -35,64 +32,56 @@ intents.voice_states = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # =========================
-# YTDL CONFIG
+# LAVALINK CONFIG
 # =========================
-ytdl_format_options = {
-    'format': 'bestaudio/best',
-    'quiet': True,
-}
+LAVALINK_URI = "https://SEU-LAVALINK.onrender.com"
+LAVALINK_PASSWORD = "youshallnotpass"
 
-ffmpeg_options = {
-    'options': '-vn'
-}
+@bot.event
+async def on_ready():
+    print(f"🤖 Bot online como {bot.user}")
 
-ytdl = yt_dlp.YoutubeDL(ytdl_format_options)
+    await wavelink.NodePool.create_node(
+        bot=bot,
+        uri=LAVALINK_URI,
+        password=LAVALINK_PASSWORD
+    )
 
 # =========================
-# PLAY COMMAND
+# PLAY
 # =========================
 @bot.command()
 async def play(ctx, *, search: str):
     if not ctx.author.voice:
-        return await ctx.send("Você precisa estar em um canal de voz.")
+        return await ctx.send("Entre em um canal de voz primeiro.")
 
     channel = ctx.author.voice.channel
 
-    if ctx.voice_client is None:
-        voice = await channel.connect()
+    if not ctx.voice_client:
+        vc = await channel.connect(cls=wavelink.Player)
     else:
-        voice = ctx.voice_client
+        vc = ctx.voice_client
 
-    await ctx.send("🔎 Procurando no YouTube...")
+    await ctx.send("🔎 Procurando...")
 
-    try:
-        # 🔥 Aqui está a mágica: ytsearch
-        info = ytdl.extract_info(f"ytsearch:{search}", download=False)
-        video = info['entries'][0]
+    tracks = await wavelink.YouTubeTrack.search(search)
 
-        url2 = video['url']
-        source = await discord.FFmpegOpusAudio.from_probe(url2, **ffmpeg_options)
+    if not tracks:
+        return await ctx.send("Nada encontrado.")
 
-        voice.stop()
-        await voice.play(source)
+    track = tracks[0]
 
-        await ctx.send(f"▶ Tocando: {video.get('title')}")
+    await vc.play(track)
 
-    except Exception as e:
-        await ctx.send("❌ Erro ao tocar música.")
-        print(e)
+    await ctx.send(f"▶ Tocando: {track.title}")
 
 # =========================
-# STOP COMMAND
+# STOP
 # =========================
 @bot.command()
 async def stop(ctx):
     if ctx.voice_client:
         await ctx.voice_client.disconnect()
         await ctx.send("⏹ Desconectado.")
-
-@bot.event
-async def on_ready():
-    print(f"🤖 Bot online como {bot.user}")
 
 bot.run(TOKEN)
