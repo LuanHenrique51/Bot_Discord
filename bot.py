@@ -6,14 +6,14 @@ from discord.ext import commands
 import wavelink
 
 # =========================
-# VARIÁVEIS DE AMBIENTE
+# VARIÁVEIS
 # =========================
 TOKEN = os.getenv("TOKEN")
 LAVALINK_URI = os.getenv("LAVALINK_URI")
 LAVALINK_PASSWORD = os.getenv("LAVALINK_PASSWORD")
 
 # =========================
-# FLASK (OBRIGAÇÃO DO RENDER)
+# FLASK (obrigatório para Web Service)
 # =========================
 app = Flask(__name__)
 
@@ -22,7 +22,7 @@ def home():
     return "Bot está rodando!"
 
 def run_web():
-    port = int(os.environ.get("PORT", 8080))
+    port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
 
 threading.Thread(target=run_web).start()
@@ -37,28 +37,27 @@ intents.voice_states = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # =========================
-# CONEXÃO LAVALINK
+# CONEXÃO LAVALINK (FIX FINAL)
 # =========================
 @bot.event
 async def on_ready():
     await bot.wait_until_ready()
 
     try:
-        nodes = [
-            wavelink.Node(
-                uri=LAVALINK_URI,
-                password=LAVALINK_PASSWORD
-            )
-        ]
+        node = wavelink.Node(
+            uri=LAVALINK_URI,
+            password=LAVALINK_PASSWORD,
+            secure=True  # ESSENCIAL para Render
+        )
 
-        await wavelink.Pool.connect(nodes=nodes, client=bot)
+        await wavelink.Pool.connect(client=bot, nodes=[node])
 
         print("✅ Lavalink conectado com sucesso!")
         print(f"🤖 Bot online como {bot.user}")
 
     except Exception as e:
-        print("❌ ERRO AO CONECTAR NO LAVALINK:")
-        print(repr(e))
+        print("❌ ERRO REAL AO CONECTAR:")
+        print(type(e).__name__, e)
 
 # =========================
 # COMANDO PLAY
