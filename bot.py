@@ -1,9 +1,9 @@
-import os
 import discord
 from discord.ext import commands
 import yt_dlp
 import asyncio
 import requests
+import os
 from bs4 import BeautifulSoup
 import re
 
@@ -12,19 +12,25 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# ===== GENIUS TOKEN =====
+# ===== TOKENS VIA ENV =====
+TOKEN = os.getenv("TOKEN")
 GENIUS_TOKEN = os.getenv("GENIUS_TOKEN")
-# ===== YT-DLP CONFIG =====
+
+# ===== YT-DLP CONFIG ATUALIZADA (ANTI-429) =====
 ytdl_options = {
-    'format': 'bestaudio[ext=m4a]/bestaudio/best',
+    'format': 'bestaudio/best',
     'quiet': True,
     'noplaylist': True,
     'default_search': 'ytsearch',
     'source_address': '0.0.0.0',
     'extractor_args': {
         'youtube': {
-            'player_client': ['android'],
+            'player_client': ['android', 'web'],
+            'skip': ['hls', 'dash'],
         }
+    },
+    'http_headers': {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
     }
 }
 
@@ -47,20 +53,18 @@ ytdl = yt_dlp.YoutubeDL(ytdl_options)
 music_queue = {}
 is_playing = {}
 
-# ===== BUSCAR LETRA NO GENIUS =====
+# ===== BUSCAR LETRA =====
 async def get_lyrics(title):
     try:
-        headers = {
-            "Authorization": f"Bearer {GENIUS_TOKEN}"
-        }
-
-        search_url = "https://api.genius.com/search"
-        data = {"q": title}
-
-        response = requests.get(search_url, headers=headers, params=data)
+        headers = {"Authorization": f"Bearer {GENIUS_TOKEN}"}
+        response = requests.get(
+            "https://api.genius.com/search",
+            headers=headers,
+            params={"q": title}
+        )
         json_data = response.json()
-
         hits = json_data["response"]["hits"]
+
         if not hits:
             return None, None, None
 
@@ -71,13 +75,12 @@ async def get_lyrics(title):
 
         page = requests.get(song_url)
         soup = BeautifulSoup(page.text, "html.parser")
-
         containers = soup.find_all("div", {"data-lyrics-container": "true"})
+
         if not containers:
             return None, None, None
 
         lyrics = ""
-
         for container in containers:
             for br in container.find_all("br"):
                 br.replace_with("\n")
@@ -90,8 +93,7 @@ async def get_lyrics(title):
 
         return lyrics, artist, cover
 
-    except Exception as e:
-        print(e)
+    except:
         return None, None, None
 
 # ===== TOCAR PRÓXIMA =====
@@ -138,7 +140,7 @@ async def play_next(ctx):
 # ===== EVENTO =====
 @bot.event
 async def on_ready():
-    print(f"✅ Bot conectado como {bot.user}")
+    print(f"Bot conectado como {bot.user}")
 
 # ===== PLAY =====
 @bot.command()
@@ -171,10 +173,8 @@ async def play(ctx, *, search: str):
             await ctx.send(f"📌 Adicionado à fila: **{title}**")
 
     except Exception as e:
-        await ctx.send("❌ Erro ao tocar a música.")
         print(e)
+        await ctx.send("❌ YouTube bloqueou a requisição (429). Tente novamente em alguns minutos.")
 
-# ===== TOKEN =====
-TOKEN = os.getenv("TOKEN")
 if __name__ == "__main__":
     bot.run(TOKEN)
