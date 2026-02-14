@@ -1,7 +1,10 @@
+import os
 import discord
 from discord.ext import commands
 import wavelink
-import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 TOKEN = os.getenv("TOKEN")
 LAVALINK_URI = os.getenv("LAVALINK_URI")
@@ -9,77 +12,71 @@ LAVALINK_PASSWORD = os.getenv("LAVALINK_PASSWORD")
 
 intents = discord.Intents.default()
 intents.message_content = True
+intents.voice_states = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-queue = {}
 
+# =========================
+# CONEXÃO COM LAVALINK
+# =========================
 @bot.event
 async def on_ready():
-    node = wavelink.Node(
-        uri=LAVALINK_URI,
-        password=LAVALINK_PASSWORD
-    )
+    await bot.wait_until_ready()
 
-    await wavelink.Pool.connect(client=bot, nodes=[node])
-    print("✅ Lavalink conectado!")
-    print(f"Bot online como {bot.user}")
+    try:
+        nodes = [
+            wavelink.Node(
+                uri=LAVALINK_URI,
+                password=LAVALINK_PASSWORD
+            )
+        ]
 
+        await wavelink.Pool.connect(nodes=nodes, client=bot)
+
+        print("✅ Lavalink conectado com sucesso!")
+        print(f"🤖 Bot online como {bot.user}")
+
+    except Exception as e:
+        print("❌ ERRO AO CONECTAR NO LAVALINK:")
+        print(repr(e))
+
+
+# =========================
+# COMANDO PLAY
+# =========================
 @bot.command()
 async def play(ctx, *, search: str):
     if not ctx.author.voice:
-        return await ctx.send("Entre em um canal de voz.")
+        return await ctx.send("Você precisa estar em um canal de voz.")
 
-    player: wavelink.Player = ctx.voice_client
+    channel = ctx.author.voice.channel
 
-    if not player:
-        player = await ctx.author.voice.channel.connect(cls=wavelink.Player)
+    player: wavelink.Player
+    if ctx.voice_client is None:
+        player = await channel.connect(cls=wavelink.Player)
+    else:
+        player = ctx.voice_client
 
     tracks = await wavelink.Playable.search(search)
 
     if not tracks:
-        return await ctx.send("Música não encontrada.")
+        return await ctx.send("Nenhuma música encontrada.")
 
     track = tracks[0]
 
-    if player.playing:
-        queue.setdefault(ctx.guild.id, []).append(track)
-        return await ctx.send(f"📌 Adicionado à fila: {track.title}")
-
     await player.play(track)
-    await ctx.send(f"🎶 Tocando: {track.title}")
+    await ctx.send(f"▶ Tocando: {track.title}")
 
-@bot.command()
-async def skip(ctx):
-    player: wavelink.Player = ctx.voice_client
-    if player:
-        await player.stop()
 
+# =========================
+# COMANDO STOP
+# =========================
 @bot.command()
 async def stop(ctx):
-    player: wavelink.Player = ctx.voice_client
-    if player:
-        await player.disconnect()
+    if ctx.voice_client:
+        await ctx.voice_client.disconnect()
+        await ctx.send("⏹ Desconectado.")
 
-@bot.command()
-async def pause(ctx):
-    player: wavelink.Player = ctx.voice_client
-    if player:
-        await player.pause(True)
-
-@bot.command()
-async def resume(ctx):
-    player: wavelink.Player = ctx.voice_client
-    if player:
-        await player.pause(False)
-
-@bot.event
-async def on_wavelink_track_end(payload):
-    player = payload.player
-    guild_id = player.guild.id
-
-    if guild_id in queue and queue[guild_id]:
-        next_track = queue[guild_id].pop(0)
-        await player.play(next_track)
 
 bot.run(TOKEN)
