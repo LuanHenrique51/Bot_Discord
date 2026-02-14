@@ -1,4 +1,5 @@
 discord.py
+flask
 wavelink
 yt-dlp
 requests
