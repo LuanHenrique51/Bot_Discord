@@ -3,17 +3,15 @@ import threading
 from flask import Flask
 import discord
 from discord.ext import commands
-import wavelink
+import yt_dlp
 
 # =========================
 # VARIÁVEIS
 # =========================
 TOKEN = os.getenv("TOKEN")
-LAVALINK_URI = os.getenv("LAVALINK_URI")
-LAVALINK_PASSWORD = os.getenv("LAVALINK_PASSWORD")
 
 # =========================
-# FLASK (obrigatório para Web Service)
+# FLASK (para Render Web Service free)
 # =========================
 app = Flask(__name__)
 
@@ -37,60 +35,64 @@ intents.voice_states = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # =========================
-# CONEXÃO LAVALINK (FIX FINAL)
+# YTDL CONFIG
 # =========================
-@bot.event
-async def on_ready():
-    await bot.wait_until_ready()
+ytdl_format_options = {
+    'format': 'bestaudio/best',
+    'quiet': True,
+}
 
-    try:
-        node = wavelink.Node(
-            uri=LAVALINK_URI,
-            password=LAVALINK_PASSWORD,
-            secure=True  # ESSENCIAL para Render
-        )
+ffmpeg_options = {
+    'options': '-vn'
+}
 
-        await wavelink.Pool.connect(client=bot, nodes=[node])
-
-        print("✅ Lavalink conectado com sucesso!")
-        print(f"🤖 Bot online como {bot.user}")
-
-    except Exception as e:
-        print("❌ ERRO REAL AO CONECTAR:")
-        print(type(e).__name__, e)
+ytdl = yt_dlp.YoutubeDL(ytdl_format_options)
 
 # =========================
-# COMANDO PLAY
+# PLAY COMMAND
 # =========================
 @bot.command()
-async def play(ctx, *, search: str):
+async def play(ctx, *, url: str):
     if not ctx.author.voice:
         return await ctx.send("Você precisa estar em um canal de voz.")
 
     channel = ctx.author.voice.channel
 
     if ctx.voice_client is None:
-        player = await channel.connect(cls=wavelink.Player)
+        voice = await channel.connect()
     else:
-        player = ctx.voice_client
+        voice = ctx.voice_client
 
-    tracks = await wavelink.Playable.search(search)
+    await ctx.send("🔎 Procurando música...")
 
-    if not tracks:
-        return await ctx.send("Nenhuma música encontrada.")
+    try:
+        info = ytdl.extract_info(url, download=False)
+        url2 = info['url']
+        source = await discord.FFmpegOpusAudio.from_probe(url2, **ffmpeg_options)
 
-    track = tracks[0]
+        voice.stop()
+        await voice.play(source)
 
-    await player.play(track)
-    await ctx.send(f"▶ Tocando: {track.title}")
+        await ctx.send(f"▶ Tocando: {info.get('title')}")
+
+    except Exception as e:
+        await ctx.send("❌ Erro ao tocar música.")
+        print(e)
 
 # =========================
-# COMANDO STOP
+# STOP COMMAND
 # =========================
 @bot.command()
 async def stop(ctx):
     if ctx.voice_client:
         await ctx.voice_client.disconnect()
         await ctx.send("⏹ Desconectado.")
+
+# =========================
+# READY
+# =========================
+@bot.event
+async def on_ready():
+    print(f"🤖 Bot online como {bot.user}")
 
 bot.run(TOKEN)
