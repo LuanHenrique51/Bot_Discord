@@ -52,7 +52,7 @@ ytdl = yt_dlp.YoutubeDL(ytdl_format_options)
 # PLAY COMMAND
 # =========================
 @bot.command()
-async def play(ctx, *, url: str):
+async def play(ctx, *, search: str):
     if not ctx.author.voice:
         return await ctx.send("Você precisa estar em um canal de voz.")
 
@@ -63,17 +63,20 @@ async def play(ctx, *, url: str):
     else:
         voice = ctx.voice_client
 
-    await ctx.send("🔎 Procurando música...")
+    await ctx.send("🔎 Procurando no YouTube...")
 
     try:
-        info = ytdl.extract_info(url, download=False)
-        url2 = info['url']
+        # 🔥 Aqui está a mágica: ytsearch
+        info = ytdl.extract_info(f"ytsearch:{search}", download=False)
+        video = info['entries'][0]
+
+        url2 = video['url']
         source = await discord.FFmpegOpusAudio.from_probe(url2, **ffmpeg_options)
 
         voice.stop()
         await voice.play(source)
 
-        await ctx.send(f"▶ Tocando: {info.get('title')}")
+        await ctx.send(f"▶ Tocando: {video.get('title')}")
 
     except Exception as e:
         await ctx.send("❌ Erro ao tocar música.")
@@ -88,9 +91,6 @@ async def stop(ctx):
         await ctx.voice_client.disconnect()
         await ctx.send("⏹ Desconectado.")
 
-# =========================
-# READY
-# =========================
 @bot.event
 async def on_ready():
     print(f"🤖 Bot online como {bot.user}")
