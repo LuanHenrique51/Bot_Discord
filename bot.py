@@ -2,9 +2,6 @@ import os
 import discord
 from discord.ext import commands
 import wavelink
-from dotenv import load_dotenv
-
-load_dotenv()
 
 TOKEN = os.getenv("TOKEN")
 LAVALINK_URI = os.getenv("LAVALINK_URI")
@@ -17,9 +14,6 @@ intents.voice_states = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 
-# =========================
-# CONEXÃO COM LAVALINK
-# =========================
 @bot.event
 async def on_ready():
     await bot.wait_until_ready()
@@ -42,9 +36,6 @@ async def on_ready():
         print(repr(e))
 
 
-# =========================
-# COMANDO PLAY
-# =========================
 @bot.command()
 async def play(ctx, *, search: str):
     if not ctx.author.voice:
@@ -52,7 +43,6 @@ async def play(ctx, *, search: str):
 
     channel = ctx.author.voice.channel
 
-    player: wavelink.Player
     if ctx.voice_client is None:
         player = await channel.connect(cls=wavelink.Player)
     else:
@@ -69,9 +59,6 @@ async def play(ctx, *, search: str):
     await ctx.send(f"▶ Tocando: {track.title}")
 
 
-# =========================
-# COMANDO STOP
-# =========================
 @bot.command()
 async def stop(ctx):
     if ctx.voice_client:
